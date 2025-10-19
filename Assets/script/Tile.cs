@@ -22,10 +22,8 @@ public class Tile : MonoBehaviour
     [Tooltip("이 타일 안에서 사용할 구조물들을 등록하세요.")]
     public List<StructureMapping> structureLibrary;
 
-    // ================== [코드 추가] ==================
     [Tooltip("생성된 구조물들이 자식으로 들어갈 부모 오브젝트입니다.")]
     public Transform structureHolder;
-    // ===============================================
 
     [Tooltip("이 타일 내부를 디자인할 설계도입니다. (GridManager에 의해 채워집니다)")]
     [TextArea(3, 5)]
@@ -34,23 +32,36 @@ public class Tile : MonoBehaviour
     private List<Renderer> structureRenderers = new List<Renderer>();
     private List<Color> originalColors = new List<Color>();
 
+    // ================== [코드 추가] ==================
+    // 구조물만 깨끗하게 청소하는 함수입니다. (Editor-only)
+    [ContextMenu("Clear Structures In Editor")]
+    public void ClearStructures()
+    {
+        if (structureHolder == null) return;
+
+        // DestroyImmediate는 에디터에서 즉시 오브젝트를 파괴할 때 사용합니다.
+        for (int i = structureHolder.childCount - 1; i >= 0; i--)
+        {
+            DestroyImmediate(structureHolder.GetChild(i).gameObject);
+        }
+        structureRenderers.Clear();
+        originalColors.Clear();
+    }
+    // ===============================================
+
     [ContextMenu("Generate Structures In Editor")]
     public void GenerateStructures()
     {
         // ================== [코드 수정] ==================
-        // structureHolder가 할당되지 않았다면 오류를 출력하고 중단합니다.
-        if (structureHolder == null)
-        {
-            Debug.LogError("Structure Holder가 할당되지 않았습니다! 프리팹을 확인해주세요.", this.gameObject);
-            return;
-        }
-
-        // 기존 구조물들을 모두 삭제합니다.
-        for (int i = structureHolder.childCount - 1; i >= 0; i--) { DestroyImmediate(structureHolder.GetChild(i).gameObject); }
+        // 이제 청소 함수를 먼저 호출합니다.
+        ClearStructures();
         // ===============================================
 
-        structureRenderers.Clear();
-        originalColors.Clear();
+        if (structureHolder == null)
+        {
+            Debug.LogError($"[{gameObject.name}] ### 실패 ###: Structure Holder가 할당되지 않았습니다! 프리팹을 확인해주세요.", this.gameObject);
+            return;
+        }
 
         if (mapLayout == null || mapLayout.Length == 0) return;
 
@@ -79,19 +90,16 @@ public class Tile : MonoBehaviour
                 if (x >= mapLayout[y].Length) continue;
                 char c = mapLayout[y][x];
 
+                if (char.IsWhiteSpace(c)) continue;
+
                 if (mappingDict.TryGetValue(c, out StructureMapping currentMapping))
                 {
-                    GameObject prefab = currentMapping.structurePrefab;
-                    if (prefab == null) continue;
+                    if (currentMapping.structurePrefab == null) continue;
 
+                    GameObject prefab = currentMapping.structurePrefab;
                     int spawnY = internalHeight - 1 - y;
                     Vector3 position = new Vector3(x * internalBlockSize.x, spawnY * internalBlockSize.y, 0) + offset;
-
-                    // ================== [코드 수정] ==================
-                    // 구조물을 생성하고, 지정된 'structureHolder'의 자식으로 만듭니다.
                     GameObject structure = Instantiate(prefab, structureHolder);
-                    // ===============================================
-
                     structure.transform.localPosition = position;
 
                     if (currentMapping.customScale == Vector3.zero)

@@ -2,15 +2,6 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 
-/*
-    =================================================================
-    GridManager.cs (수정된 버전)
-    - 이제 여러 개의 '맵 설계도'를 리스트로 관리합니다.
-    - 타일 생성 시, 순서에 맞는 설계도를 각 타일에 주입해줍니다.
-    =================================================================
-*/
-
-// 인스펙터 창에서 맵 레이아웃을 편하게 관리하기 위한 보조 클래스
 [System.Serializable]
 public class MapLayoutData
 {
@@ -28,11 +19,9 @@ public class GridManager : MonoBehaviour
     [Tooltip("구조물을 담을 수 있는 '빈 타일 프레임' 프리팹을 연결하세요.")]
     public GameObject tileFramePrefab;
 
-    // ================== [코드 추가] ==================
     [Header("Tile Blueprints")]
     [Tooltip("생성될 타일들에게 순서대로 적용될 맵 설계도 목록입니다.")]
     public List<MapLayoutData> tileLayouts;
-    // ===============================================
 
     [Header("Game Mechanics")]
     public float swapAnimationSpeed = 8f;
@@ -44,8 +33,40 @@ public class GridManager : MonoBehaviour
 
     void Start()
     {
+        // ================== [핵심 수정] ==================
+        // 게임이 시작되면, 혹시 남아있을지 모를 모든
+        // '미리보기'용 타일들을 완전히 파괴하고 시작합니다.
+        ClearAllTiles();
+        // ===============================================
+
         CreateGrid();
     }
+
+    // ================== [코드 추가 및 수정] ==================
+    // GridManager의 자식으로 있는 모든 타일 오브젝트를 파괴하는 함수
+    private void ClearAllTiles()
+    {
+        // GetComponentsInChildren는 자기 자신도 포함하므로, 
+        // Tile 컴포넌트만 골라서 모두 파괴합니다.
+        Tile[] existingTiles = GetComponentsInChildren<Tile>();
+
+        // 게임 실행 중에는 Destroy, 에디터에서는 DestroyImmediate를 사용해야 합니다.
+        if (Application.isPlaying)
+        {
+            foreach (var tile in existingTiles)
+            {
+                Destroy(tile.gameObject);
+            }
+        }
+        else
+        {
+            foreach (var tile in existingTiles)
+            {
+                DestroyImmediate(tile.gameObject);
+            }
+        }
+    }
+    // =======================================================
 
     void CreateGrid()
     {
@@ -80,20 +101,12 @@ public class GridManager : MonoBehaviour
                 Tile tileComponent = newTileFrame.GetComponent<Tile>();
                 tileComponent.SetPosition(x, y);
 
-                // ================== [코드 수정] ==================
-                // 현재 타일의 순번(인덱스)을 계산합니다.
                 int tileIndex = y * gridWidth + x;
-
-                // 설계도 목록에 해당 순번의 설계도가 있는지 확인하고 적용합니다.
                 if (tileLayouts != null && tileIndex < tileLayouts.Count)
                 {
-                    // GridManager가 가지고 있는 설계도를 타일에 주입합니다.
                     tileComponent.mapLayout = tileLayouts[tileIndex].layout;
-
-                    // 설계도가 적용되었으니, 구조물을 즉시 생성하도록 명령합니다.
                     tileComponent.GenerateStructures();
                 }
-                // ===============================================
 
                 grid[x, y] = newTileFrame;
             }
@@ -101,6 +114,7 @@ public class GridManager : MonoBehaviour
     }
 
     void Update() { if (Input.GetMouseButtonDown(0) && !isSwapping) HandleSelection(); }
+
     void HandleSelection()
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -110,6 +124,7 @@ public class GridManager : MonoBehaviour
             if (clickedTile != null) SelectTile(clickedTile);
         }
     }
+
     void SelectTile(Tile tile)
     {
         if (!tile.isSwappable) return;
@@ -121,6 +136,7 @@ public class GridManager : MonoBehaviour
             if (selectedTile2.isSwappable) StartCoroutine(SwapTilesAnimation());
         }
     }
+
     IEnumerator SwapTilesAnimation()
     {
         isSwapping = true;
@@ -141,4 +157,22 @@ public class GridManager : MonoBehaviour
         selectedTile1 = null; selectedTile2 = null;
         isSwapping = false;
     }
+
+    // ================== [에디터용 편의 기능] ==================
+    // 에디터에서 그리드를 미리 생성해볼 때 사용하는 버튼입니다.
+    [ContextMenu("Generate Grid In Editor")]
+    public void GenerateGridInEditor()
+    {
+        // 먼저 싹 지우고, 그 다음에 새로 만듭니다.
+        ClearAllTiles();
+        CreateGrid();
+    }
+
+    // 에디터에서 생성했던 모든 타일을 지울 때 사용합니다.
+    [ContextMenu("Clear Grid In Editor")]
+    public void ClearGridInEditor()
+    {
+        ClearAllTiles();
+    }
+    // =======================================================
 }

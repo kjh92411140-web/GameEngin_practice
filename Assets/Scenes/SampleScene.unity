@@ -468,7 +468,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1676609100239073865, guid: 0d780173c250d334f80c9061373c8e4f, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 24.75
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1676609100239073865, guid: 0d780173c250d334f80c9061373c8e4f, type: 3}
       propertyPath: m_LocalPosition.y
@@ -537,7 +537,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2470529085381542805, guid: a9c55b2fac05ba248a24bd117da7b964, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 30.78
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2470529085381542805, guid: a9c55b2fac05ba248a24bd117da7b964, type: 3}
       propertyPath: m_LocalPosition.y
@@ -620,10 +620,10 @@ MonoBehaviour:
   structureLibrary:
   - character: 71
     structurePrefab: {fileID: 51614526}
-    customScale: {x: 0, y: 0, z: 0}
+    customScale: {x: 1, y: 1, z: 1}
   - character: 78
     structurePrefab: {fileID: 500976163}
-    customScale: {x: 0, y: 0, z: 0}
+    customScale: {x: 1, y: 1, z: 1}
   structureHolder: {fileID: 1197726920}
   mapLayout:
   - G
