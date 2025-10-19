@@ -1,10 +1,3 @@
-/*
-    =================================================================
-    Tile.cs (Final, Independent Builder Version)
-    - 이제 이 스크립트 자체가 독립적인 미니 맵 빌더 역할을 합니다.
-    - 각 타일은 자신만의 Structure Library와 Map Layout을 가집니다.
-    =================================================================
-*/
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -13,6 +6,9 @@ public class StructureMapping
 {
     public char character;
     public GameObject structurePrefab;
+
+    [Tooltip("구조물의 크기를 직접 지정합니다. (0, 0, 0)으로 두면 타일 내 그리드 크기에 자동으로 맞춰집니다.")]
+    public Vector3 customScale = Vector3.zero;
 }
 
 public class Tile : MonoBehaviour
@@ -25,31 +21,46 @@ public class Tile : MonoBehaviour
     [Header("Internal Map Builder")]
     [Tooltip("이 타일 안에서 사용할 구조물들을 등록하세요.")]
     public List<StructureMapping> structureLibrary;
-    [Tooltip("이 타일 내부를 디자인할 설계도입니다.")]
+
+    // ================== [코드 추가] ==================
+    [Tooltip("생성된 구조물들이 자식으로 들어갈 부모 오브젝트입니다.")]
+    public Transform structureHolder;
+    // ===============================================
+
+    [Tooltip("이 타일 내부를 디자인할 설계도입니다. (GridManager에 의해 채워집니다)")]
     [TextArea(3, 5)]
     public string[] mapLayout;
 
     private List<Renderer> structureRenderers = new List<Renderer>();
     private List<Color> originalColors = new List<Color>();
 
-    void Start()
-    {
-        GenerateStructures();
-    }
-
     [ContextMenu("Generate Structures In Editor")]
     public void GenerateStructures()
     {
-        for (int i = transform.childCount - 1; i >= 0; i--) { DestroyImmediate(transform.GetChild(i).gameObject); }
+        // ================== [코드 수정] ==================
+        // structureHolder가 할당되지 않았다면 오류를 출력하고 중단합니다.
+        if (structureHolder == null)
+        {
+            Debug.LogError("Structure Holder가 할당되지 않았습니다! 프리팹을 확인해주세요.", this.gameObject);
+            return;
+        }
+
+        // 기존 구조물들을 모두 삭제합니다.
+        for (int i = structureHolder.childCount - 1; i >= 0; i--) { DestroyImmediate(structureHolder.GetChild(i).gameObject); }
+        // ===============================================
+
         structureRenderers.Clear();
         originalColors.Clear();
 
         if (mapLayout == null || mapLayout.Length == 0) return;
 
-        var prefabDict = new Dictionary<char, GameObject>();
+        var mappingDict = new Dictionary<char, StructureMapping>();
         foreach (var mapping in structureLibrary)
         {
-            if (!prefabDict.ContainsKey(mapping.character)) { prefabDict.Add(mapping.character, mapping.structurePrefab); }
+            if (!mappingDict.ContainsKey(mapping.character))
+            {
+                mappingDict.Add(mapping.character, mapping);
+            }
         }
 
         int internalHeight = mapLayout.Length;
@@ -67,13 +78,30 @@ public class Tile : MonoBehaviour
             {
                 if (x >= mapLayout[y].Length) continue;
                 char c = mapLayout[y][x];
-                if (prefabDict.TryGetValue(c, out GameObject prefab))
+
+                if (mappingDict.TryGetValue(c, out StructureMapping currentMapping))
                 {
+                    GameObject prefab = currentMapping.structurePrefab;
+                    if (prefab == null) continue;
+
                     int spawnY = internalHeight - 1 - y;
                     Vector3 position = new Vector3(x * internalBlockSize.x, spawnY * internalBlockSize.y, 0) + offset;
-                    GameObject structure = Instantiate(prefab, transform);
+
+                    // ================== [코드 수정] ==================
+                    // 구조물을 생성하고, 지정된 'structureHolder'의 자식으로 만듭니다.
+                    GameObject structure = Instantiate(prefab, structureHolder);
+                    // ===============================================
+
                     structure.transform.localPosition = position;
-                    structure.transform.localScale = new Vector3(internalBlockSize.x, internalBlockSize.y, internalBlockSize.y);
+
+                    if (currentMapping.customScale == Vector3.zero)
+                    {
+                        structure.transform.localScale = new Vector3(internalBlockSize.x, internalBlockSize.y, internalBlockSize.y);
+                    }
+                    else
+                    {
+                        structure.transform.localScale = currentMapping.customScale;
+                    }
 
                     Renderer rend = structure.GetComponent<Renderer>();
                     if (rend != null)
@@ -96,4 +124,3 @@ public class Tile : MonoBehaviour
         }
     }
 }
-
