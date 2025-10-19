@@ -1,51 +1,184 @@
 // /Assets/script/GridManager.cs
 
 using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
 
 public class GridManager : MonoBehaviour
 {
-    [Header("그리드 설정")]
-    public int width = 10;
-    public int height = 10;
-    public float spacing = 1.1f;
+    [Header("Grid Settings")]
+    public int gridWidth = 3;
+    public int gridHeight = 3;
 
-    [Header("프리팹 설정")]
-    // 이제 GridManager는 MovableTile이 아닌 Tile_Container 프리팹을 사용합니다.
-    public Tile_Container tileContainerPrefab;
+    [Header("Core Prefab")]
+    [Tooltip("MovableTile과 StructureHolder를 담을 'Tile_Container' 프리팹을 연결하세요.")]
+    public Tile_Container tileContainerPrefab; // TileFrame -> Tile_Container
+
+    [Header("Tile Blueprints")]
+    [Tooltip("생성될 타일들에게 순서대로 적용될 맵 설계도 목록입니다.")]
+    public List<MapLayoutData> tileLayouts;
+
+    [Header("Game Mechanics")]
+    public float swapAnimationSpeed = 8f;
+
+    // --- 내부 변수 ---
+    private Tile_Container[,] grid; // GameObject -> Tile_Container
+    private Tile_Container selectedTile1 = null; // Tile -> Tile_Container
+    private Tile_Container selectedTile2 = null; // Tile -> Tile_Container
+    private bool isSwapping = false;
+
 
     void Start()
     {
-        GenerateGrid();
+        ClearAllContainers();
+        CreateGrid();
     }
 
-    /// <summary>
-    /// 그리드를 생성하고 각 위치에 Tile_Container를 배치합니다.
-    /// </summary>
-    void GenerateGrid()
+    void CreateGrid()
     {
         if (tileContainerPrefab == null)
         {
-            Debug.LogError("tileContainerPrefab이 할당되지 않았습니다! 인스펙터에서 프리팹을 연결해주세요.");
+            Debug.LogError("Tile Container Prefab이 할당되지 않았습니다!");
             return;
         }
 
-        for (int x = 0; x < width; x++)
+        BoxCollider tileCollider = tileContainerPrefab.GetComponent<BoxCollider>();
+        if (tileCollider == null)
         {
-            for (int y = 0; y < height; y++)
+            Debug.LogError("Tile Container Prefab에 BoxCollider가 없습니다!");
+            return;
+        }
+
+        Vector3 tileSize = tileCollider.size;
+        Vector3 prefabScale = tileContainerPrefab.transform.localScale;
+        Vector2 tileSpacing = new Vector2(tileSize.x * prefabScale.x, tileSize.y * prefabScale.y);
+
+        grid = new Tile_Container[gridWidth, gridHeight];
+        Vector3 gridOffset = new Vector3(-(gridWidth - 1) * tileSpacing.x / 2f, -(gridHeight - 1) * tileSpacing.y / 2f, 0);
+
+        for (int y = 0; y < gridHeight; y++)
+        {
+            for (int x = 0; x < gridWidth; x++)
             {
-                // 생성 위치 계산
-                Vector3 spawnPosition = new Vector3(x * spacing, 0, y * spacing);
+                Vector3 position = new Vector3(x * tileSpacing.x, y * tileSpacing.y, 0) + gridOffset;
 
-                // Tile_Container 프리팹을 인스턴스화합니다.
-                Tile_Container newContainer = Instantiate(tileContainerPrefab, spawnPosition, Quaternion.identity);
+                // 이름과 로직을 Container 기준으로 변경
+                Tile_Container newContainer = Instantiate(tileContainerPrefab, position, Quaternion.identity, transform);
+                newContainer.name = $"TileContainer ({x}, {y})";
+                newContainer.SetPosition(x, y);
 
-                // 생성된 컨테이너를 GridManager의 자식으로 설정하여 계층 구조를 정리합니다.
-                newContainer.transform.SetParent(transform);
-                newContainer.name = $"TileContainer_{x}_{y}";
+                int tileIndex = y * gridWidth + x;
+                if (tileLayouts != null && tileIndex < tileLayouts.Count)
+                {
+                    newContainer.mapLayout = tileLayouts[tileIndex].layout;
+                    newContainer.GenerateStructures();
+                }
 
-                // 컨테이너 초기화 함수를 호출하여 자식 오브젝트(타일, 구조물)를 스스로 찾게 합니다.
-                newContainer.Initialize();
+                grid[x, y] = newContainer;
             }
         }
     }
+
+    // --- 타일 선택 및 교체 로직 (Container 기준으로 변경) ---
+    void Update()
+    {
+        if (Input.GetMouseButtonDown(0) && !isSwapping) HandleSelection();
+    }
+
+    void HandleSelection()
+    {
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        if (Physics.Raycast(ray, out RaycastHit hit))
+        {
+            Tile_Container clickedContainer = hit.collider.GetComponentInParent<Tile_Container>();
+            if (clickedContainer != null) SelectTile(clickedContainer);
+        }
+    }
+
+    void SelectTile(Tile_Container container)
+    {
+        if (!container.isSwappable) return;
+        if (selectedTile1 == null)
+        {
+            selectedTile1 = container;
+            selectedTile1.Highlight(true);
+        }
+        else
+        {
+            if (selectedTile1 == container)
+            {
+                selectedTile1.Highlight(false);
+                selectedTile1 = null;
+                return;
+            }
+            selectedTile2 = container;
+            if (selectedTile2.isSwappable) StartCoroutine(SwapTilesAnimation());
+        }
+    }
+
+    IEnumerator SwapTilesAnimation()
+    {
+        isSwapping = true;
+        selectedTile1.Highlight(false);
+        selectedTile2.Highlight(false);
+
+        Vector3 pos1 = selectedTile1.transform.position;
+        Vector3 pos2 = selectedTile2.transform.position;
+
+        float t = 0;
+        while (t < 1.0f)
+        {
+            t += Time.deltaTime * swapAnimationSpeed;
+            selectedTile1.transform.position = Vector3.Lerp(pos1, pos2, t);
+            selectedTile2.transform.position = Vector3.Lerp(pos2, pos1, t);
+            yield return null;
+        }
+        selectedTile1.transform.position = pos2;
+        selectedTile2.transform.position = pos1;
+
+        int x1 = selectedTile1.gridX, y1 = selectedTile1.gridY;
+        int x2 = selectedTile2.gridX, y2 = selectedTile2.gridY;
+
+        grid[x1, y1] = selectedTile2;
+        grid[x2, y2] = selectedTile1;
+
+        selectedTile1.SetPosition(x2, y2);
+        selectedTile2.SetPosition(x1, y1);
+
+        selectedTile1 = null;
+        selectedTile2 = null;
+        isSwapping = false;
+    }
+
+    // --- 에디터용 편의 기능 (Container 기준으로 이름 변경) ---
+    private void ClearAllContainers()
+    {
+        Tile_Container[] existingContainers = GetComponentsInChildren<Tile_Container>();
+        foreach (var container in existingContainers)
+        {
+            if (Application.isPlaying) Destroy(container.gameObject);
+            else DestroyImmediate(container.gameObject);
+        }
+    }
+
+    [ContextMenu("Generate Grid In Editor")]
+    public void GenerateGridInEditor()
+    {
+        ClearAllContainers();
+        CreateGrid();
+    }
+
+    [ContextMenu("Clear Grid In Editor")]
+    public void ClearGridInEditor()
+    {
+        ClearAllContainers();
+    }
+}
+
+// GridManager가 MapLayoutData를 사용하므로, 한 파일 안에 같이 둡니다.
+[System.Serializable]
+public class MapLayoutData
+{
+    [TextArea(3, 5)]
+    public string[] layout;
 }
