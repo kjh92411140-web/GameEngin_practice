@@ -16,6 +16,9 @@ public class GridManager : MonoBehaviour
     public GameObject wallTilePrefab;   // 교체 불가능한 벽 타일
     public GameObject emptyTilePrefab;  // 교체 가능한 빈 공간
 
+    [Header("Object Prefabs")] // <--- 이 부분을 추가합니다.
+    public GameObject myCustomObjectPrefab;
+
     [Header("Map Layout (W: Wall, N: Normal, E: Empty)")]
     [TextArea(5, 10)]
     // 기본값을 삭제하여 Inspector에서 설정하도록 변경
@@ -32,64 +35,46 @@ public class GridManager : MonoBehaviour
 
     void Start()
     {
-        CreateGrid();
+        InitializeGridFromScene();
     }
 
-    void CreateGrid()
+    void InitializeGridFromScene()
     {
-        if (normalTilePrefab == null)
+        // 씬에 있는 모든 Tile 컴포넌트(스크립트)를 가진 오브젝트를 찾습니다.
+        Tile[] allTiles = FindObjectsOfType<Tile>();
+
+        if (allTiles.Length == 0)
         {
-            Debug.LogError("Normal Tile Prefab이 할당되지 않았습니다!");
+            Debug.LogError("씬에서 'Tile' 컴포넌트를 가진 오브젝트를 찾을 수 없습니다! 타일을 배치하고 Grid X, Grid Y를 설정했는지 확인하세요.");
             return;
         }
 
-        // 프리팹의 X와 Y 스케일 값을 각각 읽어옵니다.
-        Vector2 tileSize = new Vector2(
-            normalTilePrefab.transform.localScale.x,
-            normalTilePrefab.transform.localScale.y
-        );
-
-        int gridHeight = mapLayout.Length;
-        if (gridHeight == 0) return;
-        int gridWidth = mapLayout[0].Length;
-        grid = new GameObject[gridWidth, gridHeight];
-
-        // 실제 타일 크기를 바탕으로 그리드를 화면 정중앙에 배치하기 위한 계산
-        Vector3 gridOffset = new Vector3(-(gridWidth - 1) * tileSize.x / 2f, -(gridHeight - 1) * tileSize.y / 2f, 0);
-
-        for (int y = 0; y < gridHeight; y++)
+        // 씬에 배치된 타일 중 가장 큰 좌표(Max X, Max Y)를 찾아 그리드 크기를 결정합니다.
+        int maxGridX = 0;
+        int maxGridY = 0;
+        foreach (Tile tile in allTiles)
         {
-            for (int x = 0; x < gridWidth; x++)
+            if (tile.gridX > maxGridX) maxGridX = tile.gridX;
+            if (tile.gridY > maxGridY) maxGridY = tile.gridY;
+        }
+
+        // 그리드 배열을 초기화합니다. (크기는 최대 좌표 + 1)
+        grid = new GameObject[maxGridX + 1, maxGridY + 1];
+
+        // 찾은 모든 타일을 GridManager의 2차원 배열에 저장합니다.
+        foreach (Tile tile in allTiles)
+        {
+            // 타일 오브젝트를 GridManager 배열에 정확한 좌표에 저장합니다. (GridManager의 핵심 데이터)
+            grid[tile.gridX, tile.gridY] = tile.gameObject;
+
+            // Hierarchy를 깔끔하게 유지하기 위해, GridManager의 자식으로 설정할 수 있습니다.
+            if (tile.transform.parent != this.transform)
             {
-                if (x >= mapLayout[y].Length) continue;
-
-                char tileChar = mapLayout[y][x];
-                GameObject prefabToUse = null;
-                bool isSwappable = false;
-
-                switch (tileChar)
-                {
-                    case 'W': prefabToUse = wallTilePrefab; isSwappable = false; break;
-                    case 'N': prefabToUse = normalTilePrefab; isSwappable = true; break;
-                    case 'E': prefabToUse = emptyTilePrefab; isSwappable = true; break;
-                }
-
-                if (prefabToUse != null)
-                {
-                    int spawnY = gridHeight - 1 - y;
-                    // X위치는 tileSize.x로, Y위치는 tileSize.y로 계산합니다.
-                    Vector3 position = new Vector3(x * tileSize.x, spawnY * tileSize.y, 0) + gridOffset;
-                    GameObject newTile = Instantiate(prefabToUse, position, Quaternion.identity, transform);
-
-                    Tile tileComponent = newTile.GetComponent<Tile>();
-                    if (tileComponent == null) tileComponent = newTile.AddComponent<Tile>(); // 스크립트가 없으면 추가
-
-                    tileComponent.SetPosition(x, spawnY);
-                    tileComponent.isSwappable = isSwappable;
-                    grid[x, spawnY] = newTile;
-                }
+                tile.transform.SetParent(this.transform);
             }
         }
+
+        Debug.Log($"씬에서 {grid.GetLength(0)}x{grid.GetLength(1)} 크기의 그리드를 초기화했습니다. 총 타일 수: {allTiles.Length}");
     }
 
     void Update()
