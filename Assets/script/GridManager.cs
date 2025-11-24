@@ -41,11 +41,11 @@ public class GridManager : MonoBehaviour
     void InitializeGridFromScene()
     {
         // 씬에 있는 모든 Tile 컴포넌트(스크립트)를 가진 오브젝트를 찾습니다.
-        Tile[] allTiles = FindObjectsOfType<Tile>();
+        Tile[] allTiles = FindObjectsByType<Tile>(FindObjectsSortMode.None);
 
         if (allTiles.Length == 0)
         {
-            Debug.LogError("씬에서 'Tile' 컴포넌트를 가진 오브젝트를 찾을 수 없습니다! 타일을 배치하고 Grid X, Grid Y를 설정했는지 확인하세요.");
+            Debug.LogError("씬에서 'Tile' 컴포넌트를 가진 오브젝트를 찾을 수 없습니다! 수동으로 배치하고 Grid X, Grid Y를 설정했는지 확인하세요.");
             return;
         }
 
